@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+REPO_NAME=mixtape
+
+echo "GitHub username to assign:"
+read username
+
+new_repo_name=$REPO_NAME-$username
+
+# Create the candidate's hw-repo based on the hw-template
+gh repo create convertkit/$new_repo_name --template=convertkit/$REPO_NAME --private
+
+# Add the candidate's github user as a collaborator to the new repo
+gh api --method=PUT "repos/convertkit/$new_repo_name/collaborators/$username" -f permission=push

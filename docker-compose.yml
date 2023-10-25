@@ -1,0 +1,37 @@
+version: "3.7"
+
+services:
+  redis:
+    command: redis-server --save "" --appendonly no
+    image: redis
+    volumes:
+      - ./data/redis:/data
+  app:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    command: bash -c "yarn && bundle exec rails server -b 0.0.0.0 -p 3000"
+    depends_on:
+      - redis
+    links:
+      - redis:redis
+    ports:
+      - 3000:3000
+    volumes:
+      - ./:/mixtape
+    environment:
+      - REDIS_URL=redis://redis
+
+  worker:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    command: bundle exec sidekiq -c 3
+    links:
+      - redis:redis
+    depends_on:
+      - redis
+    volumes:
+      - ./:/mixtape
+    environment:
+      - REDIS_URL=redis://redis

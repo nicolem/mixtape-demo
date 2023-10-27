@@ -27,16 +27,52 @@ class NotificationJob
   include Sidekiq::Job
 
   def perform(artist, phone_number)
-    RSpotify.authenticate("3a6010e0d5eb491996b9b10ec5722bae", "6b4b95f225134775a2beb8de051b55b6")
-    twilio = Twilio::REST::Client.new "ACd8a6cf9a41f88f8c7ccd6c07e9cd115b", "d61ef71c57656b1c4f724d8d697a1f4e"
+    begin
+      song_lookup(artist)
+      send_text(phone_number)
+    rescue Twilio::REST::RestError => e
+      Rails.logger.error e.message
+      return formatted_response(e)
+    rescue ArgumentError => e
+      Rails.logger.error e.message
+      return formatted_response(e)
+    end
+  end
 
-    artist = RSpotify::Artist.search(artist).first
-    track = artist.top_tracks(:US).first
+  private
 
-    twilio.messages.create(
-      body: "#{artist.name}'s top track: #{track.name}",
+  def song_lookup(artist)
+    RSpotify.authenticate(
+      Rails.application.credentials.spotify[:client_id],
+      Rails.application.credentials.spotify[:client_secret]
+    )
+    @artist = RSpotify::Artist.search(artist).first
+    raise ArgumentError, "Artist not found" unless @artist
+
+    @track = @artist.top_tracks(:US).first
+    raise ArgumentError, "Artist missing Top Tracks" unless @track
+  end
+
+  def send_text(phone_number)
+    twilio = Twilio::REST::Client.new(
+      Rails.application.credentials.twilio[:account_sid],
+      Rails.application.credentials.twilio[:auth_token]
+    )
+    twilio_response = twilio.messages.create(
+      body: "#{@artist.name}'s top track: #{@track.name}",
       from: "+19785755492",
       to: phone_number
     )
+
+    formatted_response(twilio_response)
+  end
+
+  def formatted_response(args)
+    {
+      error_message: args.try(:error_message) || args.try(:message),
+      status: args.try(:status) || args.try(:status_code),
+      to: args.try(:to),
+      body: args.try(:body)
+    }
   end
 end
